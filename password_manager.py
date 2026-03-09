@@ -1,8 +1,18 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
+import hashlib
 
-# ---------------- DATABASE ---------------- #
+
+
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+
+
+
 
 conn = sqlite3.connect("password_manager.db")
 cursor = conn.cursor()
@@ -27,12 +37,18 @@ CREATE TABLE IF NOT EXISTS vault (
 
 conn.commit()
 
+
+
 cursor.execute("SELECT * FROM users WHERE username='admin'")
 if not cursor.fetchone():
-    cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("admin", "admin123"))
+    hashed = hash_password("admin123")
+    cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("admin", hashed))
     conn.commit()
 
-# ---------------- LOGIN ---------------- #
+
+
+
+
 
 root = tk.Tk()
 root.title("Password Manager Login")
@@ -41,8 +57,12 @@ root.configure(bg="white")
 
 
 def login():
+    entered_user = username_entry.get()
+    entered_pass = hash_password(password_entry.get())
+
     cursor.execute("SELECT * FROM users WHERE username=? AND password=?",
-                   (username_entry.get(), password_entry.get()))
+                   (entered_user, entered_pass))
+
     if cursor.fetchone():
         root.destroy()
         open_dashboard()
@@ -73,12 +93,16 @@ def login_screen():
               width=15, command=login).pack(pady=15)
 
 
-# ---------------- DASHBOARD ---------------- #
+
+
+
+
+
 
 def open_dashboard():
     dash = tk.Tk()
     dash.title("Password Vault")
-    dash.geometry("950x550")
+    dash.geometry("900x550")
     dash.configure(bg="#f5f5f5")
 
     container = tk.Frame(dash, bg="#f5f5f5")
@@ -122,7 +146,7 @@ def open_dashboard():
     tree.heading("Website", text="Website")
 
     tree.column("ID", width=80, anchor="center")
-    tree.column("Website", width=700, anchor="w")
+    tree.column("Website", width=650, anchor="w")
 
     scrollbar = ttk.Scrollbar(card, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=scrollbar.set)
@@ -144,7 +168,9 @@ def load_data():
         tree.insert("", tk.END, values=row)
 
 
-# ---------------- ADD WINDOW ---------------- #
+
+
+
 
 def create_entry_window(parent):
     win = tk.Toplevel(parent)
@@ -172,16 +198,11 @@ def create_entry_window(parent):
     notes.pack(pady=5)
 
     def save():
-        if website.get() == "" or username.get() == "" or password.get() == "":
-            messagebox.showerror("Error", "All fields required")
-            return
-
         cursor.execute("""
             INSERT INTO vault (website, account_username, account_password, notes)
             VALUES (?, ?, ?, ?)
         """, (website.get(), username.get(), password.get(), notes.get("1.0", tk.END)))
         conn.commit()
-
         load_data()
         win.destroy()
 
@@ -190,7 +211,9 @@ def create_entry_window(parent):
               width=15, command=save).pack(pady=15)
 
 
-# ---------------- OPEN WINDOW ---------------- #
+
+
+
 
 def open_entry_window():
     selected = tree.focus()
@@ -203,63 +226,16 @@ def open_entry_window():
 
     win = tk.Toplevel()
     win.title(data[1])
-    win.geometry("800x450")
+    win.geometry("700x400")
     win.configure(bg="#f5f5f5")
 
-    card = tk.Frame(win, bg="white", bd=1, relief="solid")
-    card.pack(fill="both", expand=True, padx=30, pady=30)
+    tk.Label(win, text=f"Username: {data[2]}").pack(pady=5)
+    tk.Label(win, text=f"Password: {data[3]}").pack(pady=5)
+    tk.Label(win, text=f"Website: {data[1]}").pack(pady=5)
+    tk.Label(win, text=f"Notes: {data[4]}").pack(pady=5)
 
-    main = tk.Frame(card, bg="white")
-    main.pack(padx=40, pady=30)
-
-    # LEFT COLUMN
-    tk.Label(main, text="Username", bg="white").grid(row=0, column=0, sticky="w", pady=(0,5))
-    user_entry = tk.Entry(main, width=35)
-    user_entry.grid(row=1, column=0, padx=10, pady=(0,15))
-    user_entry.insert(0, data[2])
-    user_entry.config(state="readonly")
-
-    tk.Label(main, text="Password", bg="white").grid(row=2, column=0, sticky="w", pady=(0,5))
-    pass_entry = tk.Entry(main, width=35, show="*")
-    pass_entry.grid(row=3, column=0, padx=10, pady=(0,15))
-    pass_entry.insert(0, data[3])
-    pass_entry.config(state="readonly")
-
-    def toggle_password():
-        pass_entry.config(show="" if pass_entry.cget("show") == "*" else "*")
-
-    def copy_password():
-        win.clipboard_clear()
-        win.clipboard_append(data[3])
-        messagebox.showinfo("Copied", "Password copied to clipboard")
-
-    btn_row = tk.Frame(main, bg="white")
-    btn_row.grid(row=4, column=0, pady=10)
-
-    tk.Button(btn_row, text="Show/Hide",
-              bg="#1a73e8", fg="white",
-              width=12, command=toggle_password).pack(side="left", padx=5)
-
-    tk.Button(btn_row, text="Copy",
-              bg="#34a853", fg="white",
-              width=12, command=copy_password).pack(side="left", padx=5)
-
-    # RIGHT COLUMN
-    tk.Label(main, text="Website", bg="white").grid(row=0, column=1, sticky="w", pady=(0,5))
-    web_entry = tk.Entry(main, width=35)
-    web_entry.grid(row=1, column=1, padx=20, pady=(0,15))
-    web_entry.insert(0, data[1])
-    web_entry.config(state="readonly")
-
-    tk.Label(main, text="Notes", bg="white").grid(row=2, column=1, sticky="w", pady=(0,5))
-    notes_box = tk.Text(main, width=35, height=6)
-    notes_box.grid(row=3, column=1, padx=20, pady=(0,15))
-    notes_box.insert("1.0", data[4])
-    notes_box.config(state="disabled")
-
-    tk.Button(card, text="Delete",
+    tk.Button(win, text="Delete",
               bg="#ea4335", fg="white",
-              width=15,
               command=lambda: delete_entry(data[0], win)).pack(pady=15)
 
 
@@ -270,33 +246,30 @@ def delete_entry(entry_id, window):
     window.destroy()
 
 
-# ---------------- EXPORT ---------------- #
+
+
+
 
 def export_prompt():
     win = tk.Toplevel()
     win.title("Confirm Export")
     win.geometry("350x200")
-    win.configure(bg="white")
 
-    tk.Label(win, text="Re-enter Login Password",
-             bg="white").pack(pady=20)
-
-    entry = tk.Entry(win, show="*", width=25)
-    entry.pack(pady=5)
+    tk.Label(win, text="Re-enter Login Password").pack(pady=15)
+    entry = tk.Entry(win, show="*")
+    entry.pack()
 
     def verify():
         cursor.execute("SELECT password FROM users WHERE username='admin'")
-        real_pass = cursor.fetchone()[0]
+        real_hash = cursor.fetchone()[0]
 
-        if entry.get() == real_pass:
+        if hash_password(entry.get()) == real_hash:
             export_passwords()
             win.destroy()
         else:
             messagebox.showerror("Error", "Incorrect Password")
 
-    tk.Button(win, text="Confirm",
-              bg="#1a73e8", fg="white",
-              width=15, command=verify).pack(pady=15)
+    tk.Button(win, text="Confirm", command=verify).pack(pady=10)
 
 
 def export_passwords():
@@ -312,10 +285,12 @@ def export_passwords():
             file.write(f"Notes: {entry[3]}\n")
             file.write("-" * 40 + "\n")
 
-    messagebox.showinfo("Success", "Passwords exported to password_export.txt")
+    messagebox.showinfo("Success", "Passwords exported successfully")
 
 
-# ---------------- START ---------------- #
+
+
+
 
 login_screen()
 root.mainloop()
